@@ -1,3 +1,4 @@
+/* eslint-disable prettier/prettier */
 import {
   iframeGenerator,
   recoverEventListeners,
@@ -164,7 +165,7 @@ export default class Wujie {
     const iframeWindow = this.iframe.contentWindow;
     const iframeFetch = fetch
       ? (input: RequestInfo, init?: RequestInit) =>
-          fetch(typeof input === "string" ? getAbsolutePath(input, (this.proxyLocation as Location).href) : input, init)
+        fetch(typeof input === "string" ? getAbsolutePath(input, (this.proxyLocation as Location).href) : input, init)
       : this.fetch;
     if (iframeFetch) {
       iframeWindow.fetch = iframeFetch;
@@ -364,7 +365,7 @@ export default class Wujie {
   }
 
   /** 保活模式和使用proxyLocation.href跳转链接都不应该销毁shadow */
-  public async unmount(): Promise<void> {
+  public unmount(): void {
     this.activeFlag = false;
     // 清理子应用过期的同步参数
     clearInactiveAppUrl();
@@ -374,7 +375,7 @@ export default class Wujie {
     if (!this.mountFlag) return;
     if (isFunction(this.iframe.contentWindow.__WUJIE_UNMOUNT) && !this.alive && !this.hrefFlag) {
       this.lifecycles?.beforeUnmount?.(this.iframe.contentWindow);
-      await this.iframe.contentWindow.__WUJIE_UNMOUNT();
+      this.iframe.contentWindow.__WUJIE_UNMOUNT()
       this.lifecycles?.afterUnmount?.(this.iframe.contentWindow);
       this.mountFlag = false;
       this.bus?.$clear();
