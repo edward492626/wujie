@@ -51,6 +51,7 @@ export function defineWujieWebComponent() {
       disconnectedCallback(): void {
         const sandbox = getWujieById(this.getAttribute(WUJIE_APP_ID));
         sandbox?.unmount();
+        sandbox.shadowRoot = null; //清除对 shadowRoot 的引用
       }
     }
     customElements?.define("wujie-app", WujieApp);
