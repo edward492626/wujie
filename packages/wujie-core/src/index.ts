@@ -2,7 +2,7 @@ import importHTML, { processCssLoader } from "./entry";
 import { StyleObject, ScriptAttributes } from "./template";
 import WuJie, { lifecycle } from "./sandbox";
 import { defineWujieWebComponent, addLoading } from "./shadow";
-import { processAppForHrefJump } from "./sync";
+import { processAppForHrefJump, cleanupGlobalPopstateListener } from "./sync";
 import { getPlugins } from "./plugin";
 import {
   wujieSupport,
@@ -342,3 +342,9 @@ export function destroyApp(id: string): void {
     sandbox.destroy();
   }
 }
+
+/**
+ * 清理全局popstate事件监听器
+ * 用于解决内存泄漏问题
+ */
+export { cleanupGlobalPopstateListener };

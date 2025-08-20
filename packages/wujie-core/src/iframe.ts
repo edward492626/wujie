@@ -394,6 +394,14 @@ function patchDocumentEffect(iframeWindow: Window): void {
   const handlerCallbackMap: WeakMap<EventListenerOrEventListenerObject, EventListenerOrEventListenerObject> =
     new WeakMap();
   const handlerTypeMap: WeakMap<EventListenerOrEventListenerObject, Array<string>> = new WeakMap();
+
+  // 将WeakMap存储到sandbox中，以便在destroy时清理
+  if (!sandbox.documentEventMaps) {
+    sandbox.documentEventMaps = {
+      handlerCallbackMap,
+      handlerTypeMap,
+    };
+  }
   iframeWindow.Document.prototype.addEventListener = function (
     type: string,
     handler: EventListenerOrEventListenerObject,
@@ -519,7 +527,7 @@ function patchDocumentEffect(iframeWindow: Window): void {
     }
   });
   // 处理document专属事件
-  // TODO 内存泄露
+  // 修复内存泄漏：正确管理事件监听器的映射关系
   documentEvents.forEach((propKey) => {
     const descriptor = Object.getOwnPropertyDescriptor(iframeWindow.Document.prototype, propKey) || {
       enumerable: true,
@@ -535,19 +543,51 @@ function patchDocumentEffect(iframeWindow: Window): void {
         set:
           descriptor.writable || descriptor.set
             ? (handler) => {
-                // (sandbox.degrade ? sandbox : window).document[propKey] =
-                //   typeof handler === "function" ? handler.bind(iframeWindow.document) : handler;
-                (sandbox.degrade ? sandbox : window).document.removeEventListener(
-                  propKey,
-                  handlerCallbackMap.get(handler)
-                );
+                const targetDocument = (sandbox.degrade ? sandbox : window).document;
+                const eventType = propKey.slice(2); // 移除'on'前缀
+
+                // 如果handler为null或undefined，只需要移除现有的监听器
+                if (!handler) {
+                  const existingCallback = handlerCallbackMap.get(handler);
+                  if (existingCallback) {
+                    targetDocument.removeEventListener(eventType, existingCallback);
+                    handlerCallbackMap.delete(handler);
+                    const typeList = handlerTypeMap.get(handler);
+                    if (typeList) {
+                      const index = typeList.indexOf(eventType);
+                      if (index > -1) {
+                        typeList.splice(index, 1);
+                        if (typeList.length === 0) {
+                          handlerTypeMap.delete(handler);
+                        }
+                      }
+                    }
+                  }
+                  return;
+                }
+
+                // 移除之前的回调
+                const existingCallback = handlerCallbackMap.get(handler);
+                if (existingCallback) {
+                  targetDocument.removeEventListener(eventType, existingCallback);
+                }
+
                 // 绑定新回调函数
-                (sandbox.degrade ? sandbox : window).document.addEventListener(
-                  propKey,
-                  typeof handler === "function" ? handler.bind(iframeWindow.document) : handler
-                );
+                const boundHandler = typeof handler === "function" ? handler.bind(iframeWindow.document) : handler;
+                targetDocument.addEventListener(eventType, boundHandler);
+
                 // 更新回调函数的映射
-                handlerCallbackMap.set(handler, handler.bind(iframeWindow.document));
+                handlerCallbackMap.set(handler, boundHandler);
+
+                // 更新类型映射
+                const typeList = handlerTypeMap.get(handler);
+                if (typeList) {
+                  if (!typeList.includes(eventType)) {
+                    typeList.push(eventType);
+                  }
+                } else {
+                  handlerTypeMap.set(handler, [eventType]);
+                }
               }
             : undefined,
       });

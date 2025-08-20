@@ -35,6 +35,76 @@ function locationHrefSet(iframe: HTMLIFrameElement, value: string, appHostPath: 
 }
 
 /**
+ * 代理状态管理
+ */
+interface ProxyState {
+  destroyed: boolean;
+  iframe: HTMLIFrameElement | null;
+  urlElement: HTMLAnchorElement | null;
+  mainHostPath: string;
+  appHostPath: string;
+}
+
+/**
+ * 创建可销毁的代理处理器
+ */
+function createDestroyableProxyHandler(state: ProxyState) {
+  return {
+    // @ts-ignore
+    get: (target: Window, p: PropertyKey): any => {
+      // 检查是否已销毁
+      if (state.destroyed || !state.iframe?.contentWindow) {
+        console.warn(`[wujie] Proxy已销毁，无法访问属性: ${String(p)}`);
+        return undefined;
+      }
+
+      const actualTarget = state.iframe.contentWindow;
+
+      // location进行劫持
+      if (p === "location") {
+        return actualTarget.__WUJIE.proxyLocation;
+      }
+      // 判断自身
+      if (p === "self" || (p === "window" && Object.getOwnPropertyDescriptor(window, "window").get)) {
+        return actualTarget.__WUJIE.proxy;
+      }
+      // 不要绑定this
+      if (p === "__WUJIE_RAW_DOCUMENT_QUERY_SELECTOR__" || p === "__WUJIE_RAW_DOCUMENT_QUERY_SELECTOR_ALL__") {
+        return actualTarget[p];
+      }
+      // https://262.ecma-international.org/8.0/#sec-proxy-object-internal-methods-and-internal-slots-get-p-receiver
+      const descriptor = Object.getOwnPropertyDescriptor(actualTarget, p);
+      if (descriptor?.configurable === false && descriptor?.writable === false) {
+        return actualTarget[p];
+      }
+      // 修正this指针指向
+      return getTargetValue(actualTarget, p);
+    },
+    // @ts-ignore
+    set: (target: Window, p: PropertyKey, value: any) => {
+      // 检查是否已销毁
+      if (state.destroyed || !state.iframe?.contentWindow) {
+        console.warn(`[wujie] Proxy已销毁，无法设置属性: ${String(p)}`);
+        return false;
+      }
+
+      const actualTarget = state.iframe.contentWindow;
+      checkProxyFunction(actualTarget, value);
+      // @ts-ignore
+      actualTarget[p] = value;
+      return true;
+    },
+    // @ts-ignore
+    has: (target: Window, p: PropertyKey) => {
+      if (state.destroyed || !state.iframe?.contentWindow) {
+        return false;
+      }
+      return p in state.iframe.contentWindow;
+    },
+  };
+}
+
+/**
  * 非降级情况下window、document、location代理
  */
 export function proxyGenerator(
@@ -46,38 +116,19 @@ export function proxyGenerator(
   proxyWindow: Window;
   proxyDocument: Object;
   proxyLocation: Object;
+  destroy: () => void;
 } {
-  const proxyWindow = new Proxy(iframe.contentWindow, {
-    get: (target: Window, p: PropertyKey): any => {
-      // location进行劫持
-      if (p === "location") {
-        return target.__WUJIE.proxyLocation;
-      }
-      // 判断自身
-      if (p === "self" || (p === "window" && Object.getOwnPropertyDescriptor(window, "window").get)) {
-        return target.__WUJIE.proxy;
-      }
-      // 不要绑定this
-      if (p === "__WUJIE_RAW_DOCUMENT_QUERY_SELECTOR__" || p === "__WUJIE_RAW_DOCUMENT_QUERY_SELECTOR_ALL__") {
-        return target[p];
-      }
-      // https://262.ecma-international.org/8.0/#sec-proxy-object-internal-methods-and-internal-slots-get-p-receiver
-      const descriptor = Object.getOwnPropertyDescriptor(target, p);
-      if (descriptor?.configurable === false && descriptor?.writable === false) {
-        return target[p];
-      }
-      // 修正this指针指向
-      return getTargetValue(target, p);
-    },
+  // 创建代理状态
+  const proxyState: ProxyState = {
+    destroyed: false,
+    iframe,
+    urlElement,
+    mainHostPath,
+    appHostPath,
+  };
 
-    set: (target: Window, p: PropertyKey, value: any) => {
-      checkProxyFunction(target, value);
-      target[p] = value;
-      return true;
-    },
-
-    has: (target: Window, p: PropertyKey) => p in target,
-  });
+  // 使用空对象作为代理目标，避免直接引用iframe.contentWindow
+  const proxyWindow = new Proxy({} as Window, createDestroyableProxyHandler(proxyState));
 
   // proxy document
   const proxyDocument = new Proxy(
@@ -252,7 +303,15 @@ export function proxyGenerator(
       },
     }
   );
-  return { proxyWindow, proxyDocument, proxyLocation };
+
+  // 提供销毁方法
+  const destroy = () => {
+    proxyState.destroyed = true;
+    proxyState.iframe = null;
+    proxyState.urlElement = null;
+  };
+
+  return { proxyWindow, proxyDocument, proxyLocation, destroy };
 }
 
 /**
