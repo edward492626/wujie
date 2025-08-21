@@ -213,6 +213,13 @@ export const rawRemoveEventListener = Node.prototype.removeEventListener;
 export const rawWindowAddEventListener = window.addEventListener;
 export const rawWindowRemoveEventListener = window.removeEventListener;
 export const rawAppendChild = Node.prototype.appendChild;
-export const rawDocumentQuerySelector = window.__POWERED_BY_WUJIE__
+export let rawDocumentQuerySelector = window.__POWERED_BY_WUJIE__
   ? window.__WUJIE_RAW_DOCUMENT_QUERY_SELECTOR__
   : Document.prototype.querySelector;
+
+/**
+ * 清理 rawDocumentQuerySelector 引用，防止内存泄漏
+ */
+export function clearRawDocumentQuerySelector(): void {
+  rawDocumentQuerySelector = null;
+}

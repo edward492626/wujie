@@ -33,6 +33,8 @@ import { EventBus, appEventObjMap, EventObj } from "./event";
 import { isFunction, wujieSupport, appRouteParse, requestIdleCallback, getAbsolutePath, eventTrigger } from "./utils";
 import { WUJIE_DATA_ATTACH_CSS_FLAG } from "./constant";
 import { plugin, ScriptObjectLoader, loadErrorHandler } from "./index";
+import { clearAllCache } from "./entry";
+import { clearRawDocumentQuerySelector } from "./common";
 
 export type lifecycle = (appWindow: Window) => any;
 type lifecycles = {
@@ -398,6 +400,8 @@ export default class Wujie {
   /** 销毁子应用 */
   public destroy() {
     this.unmount();
+    clearAllCache();
+    clearRawDocumentQuerySelector();
     this.bus.$clear();
     this.shadowRoot = null;
     this.proxy = null;

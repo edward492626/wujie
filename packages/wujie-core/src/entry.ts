@@ -40,6 +40,26 @@ const styleCache = {};
 const scriptCache = {};
 const embedHTMLCache = {};
 
+/**
+ * 清理所有缓存，防止内存泄漏
+ */
+export function clearAllCache(): void {
+  // 清理样式缓存
+  Object.keys(styleCache).forEach((key) => {
+    delete styleCache[key];
+  });
+
+  // 清理脚本缓存
+  Object.keys(scriptCache).forEach((key) => {
+    delete scriptCache[key];
+  });
+
+  // 清理HTML缓存
+  Object.keys(embedHTMLCache).forEach((key) => {
+    delete embedHTMLCache[key];
+  });
+}
+
 if (!window.fetch) {
   error(WUJIE_TIPS_NO_FETCH);
   throw new Error();
