@@ -3,10 +3,6 @@ import { renderIframeReplaceApp, patchEventTimeStamp } from "./iframe";
 import { renderElementToContainer, initRenderIframeAndContainer } from "./shadow";
 import { getWujieById, rawDocumentQuerySelector } from "./common";
 
-// 全局popstate事件监听器管理
-let globalPopstateHandler: ((event: PopStateEvent) => void) | null = null;
-let isPopstateListenerActive = false;
-
 /**
  * 同步子应用路由到主应用路由
  */
@@ -117,13 +113,7 @@ export function pushUrlToWindow(id: string, url: string): void {
  * 应用跳转(window.location.href)情况路由处理
  */
 export function processAppForHrefJump(): void {
-  // 避免重复添加监听器
-  if (isPopstateListenerActive) {
-    return;
-  }
-
-  // 创建popstate事件处理函数
-  globalPopstateHandler = () => {
+  window.addEventListener("popstate", () => {
     let winUrlElement = anchorElementGenerator(window.location.href);
     const queryMap = getAnchorElementQueryMap(winUrlElement);
     winUrlElement = null;
@@ -164,20 +154,5 @@ export function processAppForHrefJump(): void {
           sandbox.hrefFlag = false;
         }
       });
-  };
-
-  // 添加事件监听器
-  window.addEventListener("popstate", globalPopstateHandler);
-  isPopstateListenerActive = true;
-}
-
-/**
- * 清理全局popstate事件监听器
- */
-export function cleanupGlobalPopstateListener(): void {
-  if (globalPopstateHandler && isPopstateListenerActive) {
-    window.removeEventListener("popstate", globalPopstateHandler);
-    globalPopstateHandler = null;
-    isPopstateListenerActive = false;
-  }
+  });
 }

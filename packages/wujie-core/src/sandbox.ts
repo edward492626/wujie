@@ -115,11 +115,6 @@ export default class Wujie {
     Node,
     Array<{ type: string; handler: EventListenerOrEventListenerObject; options: any }>
   > = new WeakMap();
-  /** document事件映射，用于内存泄漏清理 */
-  public documentEventMaps?: {
-    handlerCallbackMap: WeakMap<EventListenerOrEventListenerObject, EventListenerOrEventListenerObject>;
-    handlerTypeMap: WeakMap<EventListenerOrEventListenerObject, Array<string>>;
-  };
 
   /** $wujie对象，提供给子应用的接口 */
   public provide: {
@@ -417,12 +412,6 @@ export default class Wujie {
     this.head = null;
     this.body = null;
     this.elementEventCacheMap = null;
-    // 清理document事件映射，防止内存泄漏
-    if (this.documentEventMaps) {
-      this.documentEventMaps.handlerCallbackMap = null;
-      this.documentEventMaps.handlerTypeMap = null;
-      this.documentEventMaps = null;
-    }
     this.lifecycles = null;
     this.plugins = null;
     this.provide = null;
