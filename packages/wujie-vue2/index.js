@@ -13,7 +13,7 @@ const wujieVueOptions = {
     prefix: { type: Object, default: undefined },
     alive: { type: Boolean, default: undefined },
     props: { type: Object, default: undefined },
-    attrs: {type: Object, default: undefined},
+    attrs: { type: Object, default: undefined },
     replace: { type: Function, default: undefined },
     fetch: { type: Function, default: undefined },
     fiber: { type: Boolean, default: undefined },
@@ -27,6 +27,7 @@ const wujieVueOptions = {
     activated: { type: Function, default: null },
     deactivated: { type: Function, default: null },
     loadError: { type: Function, default: null },
+    style: { type: Object, default: {} },
   },
   data() {
     return {
@@ -105,6 +106,7 @@ const wujieVueOptions = {
       style: {
         width: this.width,
         height: this.height,
+        ...this.style,
       },
       ref: "wujie",
     });
