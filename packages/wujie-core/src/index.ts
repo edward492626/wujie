@@ -233,7 +233,7 @@ export async function startApp(startOptions: startOptions): Promise<Function | v
         await sandbox.start(getExternalScripts);
       }
       sandbox.lifecycles?.activated?.(sandbox.iframe.contentWindow);
-      return () => sandbox.destroy();
+      return async () => await sandbox.destroy();
     } else if (isFunction(iframeWindow.__WUJIE_MOUNT)) {
       /**
        * 子应用切换会触发webcomponent的disconnectedCallback调用sandbox.unmount进行实例销毁
@@ -248,7 +248,7 @@ export async function startApp(startOptions: startOptions): Promise<Function | v
       iframeWindow.__WUJIE_MOUNT();
       sandbox.lifecycles?.afterMount?.(sandbox.iframe.contentWindow);
       sandbox.mountFlag = true;
-      return () => sandbox.destroy();
+      return async () => await sandbox.destroy();
     } else {
       // 没有渲染函数
       await sandbox.destroy();
@@ -273,7 +273,7 @@ export async function startApp(startOptions: startOptions): Promise<Function | v
   const processedHtml = await processCssLoader(newSandbox, template, getExternalStyleSheets);
   await newSandbox.active({ url, sync, prefix, template: processedHtml, el, props, alive, fetch, replace });
   await newSandbox.start(getExternalScripts);
-  return newSandbox.destroy;
+  return async () => await newSandbox.destroy();
 }
 
 /**
@@ -336,9 +336,9 @@ export function preloadApp(preOptions: preOptions): void {
 /**
  * 销毁无界APP
  */
-export function destroyApp(id: string): void {
+export async function destroyApp(id: string): Promise<void> {
   const sandbox = getWujieById(id);
   if (sandbox) {
-    sandbox.destroy();
+    await sandbox.destroy();
   }
 }
