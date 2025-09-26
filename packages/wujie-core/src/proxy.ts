@@ -304,7 +304,7 @@ export function localGenerator(
     },
     getElementsByTagName: {
       get() {
-        return function (...args) {
+        return (...args) => {
           const tagName = args[0];
           if (tagName === "script") {
             return iframe.contentDocument.scripts as any;
@@ -315,9 +315,10 @@ export function localGenerator(
     },
     getElementById: {
       get() {
-        return function (...args) {
+        return (...args) => {
           const id = args[0];
-          return (sandbox.document.getElementById(id) as any) || iframe.contentDocument.getElementById(id);
+          // return (sandbox.document.getElementById(id) as any) || iframe.contentDocument.getElementById(id);
+          return sandbox.document.getElementById(id) as any;
         };
       },
     },
