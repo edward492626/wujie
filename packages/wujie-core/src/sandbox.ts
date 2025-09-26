@@ -365,7 +365,7 @@ export default class Wujie {
   }
 
   /** 保活模式和使用proxyLocation.href跳转链接都不应该销毁shadow */
-  public async unmount():  Promise<void> {
+  public unmount(): void {
     this.activeFlag = false;
     // 清理子应用过期的同步参数
     clearInactiveAppUrl();
@@ -375,7 +375,7 @@ export default class Wujie {
     if (!this.mountFlag) return;
     if (isFunction(this.iframe.contentWindow.__WUJIE_UNMOUNT) && !this.alive && !this.hrefFlag) {
       this.lifecycles?.beforeUnmount?.(this.iframe.contentWindow);
-      await this.iframe.contentWindow.__WUJIE_UNMOUNT();
+      this.iframe.contentWindow.__WUJIE_UNMOUNT()
       this.lifecycles?.afterUnmount?.(this.iframe.contentWindow);
       this.mountFlag = false;
       this.bus?.$clear();
@@ -391,8 +391,8 @@ export default class Wujie {
   }
 
   /** 销毁子应用 */
-  public async destroy() {
-    await this.unmount();
+  public destroy() {
+    this.unmount();
     this.bus.$clear();
     this.shadowRoot = null;
     this.proxy = null;

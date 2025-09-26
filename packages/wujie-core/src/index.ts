@@ -233,13 +233,13 @@ export async function startApp(startOptions: startOptions): Promise<Function | v
         await sandbox.start(getExternalScripts);
       }
       sandbox.lifecycles?.activated?.(sandbox.iframe.contentWindow);
-      return () => sandbox.destroy();
+      return sandbox.destroy;
     } else if (isFunction(iframeWindow.__WUJIE_MOUNT)) {
       /**
        * 子应用切换会触发webcomponent的disconnectedCallback调用sandbox.unmount进行实例销毁
        * 此处是防止没有销毁webcomponent时调用startApp的情况，需要手动调用unmount
        */
-      await sandbox.unmount();
+      sandbox.unmount();
       await sandbox.active({ url, sync, prefix, el, props, alive, fetch, replace });
       // 正常加载的情况，先注入css，最后才mount。重新激活也保持同样的时序
       sandbox.rebuildStyleSheets();
@@ -248,10 +248,10 @@ export async function startApp(startOptions: startOptions): Promise<Function | v
       iframeWindow.__WUJIE_MOUNT();
       sandbox.lifecycles?.afterMount?.(sandbox.iframe.contentWindow);
       sandbox.mountFlag = true;
-      return () => sandbox.destroy();
+      return sandbox.destroy;
     } else {
       // 没有渲染函数
-      await sandbox.destroy();
+      sandbox.destroy();
     }
   }
 
