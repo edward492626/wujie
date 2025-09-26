@@ -114,7 +114,11 @@ export default class Wujie {
   public elementEventCacheMap: WeakMap<
     Node,
     Array<{ type: string; handler: EventListenerOrEventListenerObject; options: any }>
-  > = new WeakMap();
+    > = new WeakMap();
+  /** 子应用window自定义监听事件 */
+  public iframeAddEventListeners?: Array<string>;
+  /** 子应用iframe自定义on事件 */
+  public iframeOnEvents?: Array<string>;
 
   /** $wujie对象，提供给子应用的接口 */
   public provide: {
@@ -418,6 +422,8 @@ export default class Wujie {
     this.inject = null;
     this.execQueue = null;
     this.prefix = null;
+    this.iframeAddEventListeners = null;
+    this.iframeOnEvents = null;
     // 清除 dom
     if (this.el) {
       clearChild(this.el);
@@ -484,6 +490,8 @@ export default class Wujie {
     degrade;
     plugins: Array<plugin>;
     lifecycles: lifecycles;
+    iframeAddEventListeners?: Array<string>;
+    iframeOnEvents?: Array<string>;
   }) {
     // 传递inject给嵌套子应用
     if (window.__POWERED_BY_WUJIE__) this.inject = window.__WUJIE.inject;
@@ -506,6 +514,8 @@ export default class Wujie {
     this.execQueue = [];
     this.lifecycles = lifecycles;
     this.plugins = getPlugins(plugins);
+    this.iframeAddEventListeners = options.iframeAddEventListeners;
+    this.iframeOnEvents = options.iframeOnEvents;
 
     // 创建目标地址的解析
     const { urlElement, appHostPath, appRoutePath } = appRouteParse(url);
