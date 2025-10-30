@@ -72,7 +72,7 @@ function cssRelativePathResolve(code: string, src: string, base: string) {
   // 使用更简单的正则表达式，避免复杂的嵌套括号匹配
   const urlReg = new RegExp("url\\((['\"]?)([^)]+)\\1\\)", "g");
 
-  return code.replace(urlReg, (_m, pre, url, post) => {
+  return code.replace(urlReg, (_m, pre, url) => {
     const base64Regex = new RegExp("^data:");
     const isBase64 = base64Regex.test(url);
 
@@ -81,7 +81,7 @@ function cssRelativePathResolve(code: string, src: string, base: string) {
       return _m;
     }
 
-    return `url(${pre}${getAbsolutePath(url, baseUrl)}${post})`;
+    return `url(${pre}${getAbsolutePath(url, baseUrl)}${pre})`;
   });
 }
 
