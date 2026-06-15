@@ -1,5 +1,5 @@
 import { bus, preloadApp, startApp as rawStartApp, destroyApp, setupApp } from "wujie";
-import { h, defineComponent } from "vue";
+import { h, defineComponent, ref, onMounted, onBeforeUnmount, watch } from "vue";
 
 /**
  * 清理全局 startApp 串行队列，防止组件销毁后 window.__WUJIE_QUEUE 长期持有
@@ -13,7 +13,7 @@ function clearStartAppQueue(name, queue) {
   }
 }
 
-const wujieVueOptions = {
+const WujieVue = defineComponent({
   name: "WujieVue",
   props: {
     width: { type: String, default: "" },
@@ -39,114 +39,117 @@ const wujieVueOptions = {
     activated: { type: Function, default: null },
     deactivated: { type: Function, default: null },
     loadError: { type: Function, default: null },
+    // eslint-disable-next-line vue/no-reserved-props
     style: { type: Object, default: undefined },
     iframeAddEventListeners: { type: Array, default: null },
     iframeOnEvents: { type: Array, default: null },
   },
-  data() {
-    return {
-      startAppQueue: Promise.resolve(),
-      isUnmounted: false,
-    };
-  },
-  mounted() {
-    if (this.name) {
-      if (window.__WUJIE_QUEUE) {
-        if (window.__WUJIE_QUEUE[this.name]) {
-          this.startAppQueue = window.__WUJIE_QUEUE[this.name];
-        } else {
-          window.__WUJIE_QUEUE[this.name] = this.startAppQueue;
-        }
-      } else {
-        window.__WUJIE_QUEUE = {
-          [this.name]: this.startAppQueue,
-        };
-      }
+  setup(props, { emit }) {
+    let isUnmounted = false;
+    const startAppQueue = ref(Promise.resolve());
+    const wujieRef = ref(null);
+
+    function handleEmit(event, ...args) {
+      emit(event, ...args);
     }
-    bus.$onAll(this.handleEmit);
-    this.execStartApp();
-    this.$watch(
-      () => this.name + this.url,
-      () => this.execStartApp()
-    );
-  },
-  methods: {
-    handleEmit(event, ...args) {
-      this.$emit(event, ...args);
-    },
-    async startApp() {
-      // 拦截组件卸载后仍残留在 __WUJIE_QUEUE Promise 链中的 .then(startApp) 幽灵执行
-      if (this.isUnmounted) return;
+
+    async function startApp() {
+      // 组件已卸载，阻止残留的 Promise .then(startApp) 创建孤儿 sandbox
+      if (isUnmounted) return;
       try {
-        const destroy = await rawStartApp({
-          name: this.name,
-          url: this.url,
-          el: this.$refs.wujie,
-          loading: this.loading,
-          alive: this.alive,
-          fetch: this.fetch,
-          props: this.props,
-          attrs: this.attrs,
-          replace: this.replace,
-          sync: this.sync,
-          prefix: this.prefix,
-          fiber: this.fiber,
-          degrade: this.degrade,
-          plugins: this.plugins,
-          beforeLoad: this.beforeLoad,
-          beforeMount: this.beforeMount,
-          afterMount: this.afterMount,
-          beforeUnmount: this.beforeUnmount,
-          afterUnmount: this.afterUnmount,
-          activated: this.activated,
-          deactivated: this.deactivated,
-          loadError: this.loadError,
-          iframeAddEventListeners: this.iframeAddEventListeners,
-          iframeOnEvents: this.iframeOnEvents,
+        const destroyAppFn = await rawStartApp({
+          name: props.name,
+          url: props.url,
+          el: wujieRef.value,
+          loading: props.loading,
+          alive: props.alive,
+          fetch: props.fetch,
+          props: props.props,
+          attrs: props.attrs,
+          replace: props.replace,
+          sync: props.sync,
+          prefix: props.prefix,
+          fiber: props.fiber,
+          degrade: props.degrade,
+          plugins: props.plugins,
+          beforeLoad: props.beforeLoad,
+          beforeMount: props.beforeMount,
+          afterMount: props.afterMount,
+          beforeUnmount: props.beforeUnmount,
+          afterUnmount: props.afterUnmount,
+          activated: props.activated,
+          deactivated: props.deactivated,
+          loadError: props.loadError,
+          iframeAddEventListeners: props.iframeAddEventListeners,
+          iframeOnEvents: props.iframeOnEvents,
         });
-        // 异步创建跨越了卸载点，兜底销毁孤儿 sandbox
-        if (this.isUnmounted && typeof destroy === "function") {
-          destroy();
+        // rawStartApp 在异步加载期间组件可能已卸载，立即销毁刚创建的孤儿 sandbox
+        if (isUnmounted && destroyAppFn) {
+        // if (destroyAppFn) {
+          destroyAppFn();
         }
       } catch (error) {
         console.log(error);
       }
-    },
-    execStartApp() {
-      // 卸载后 watch 残留触发不应再入队
-      if (this.isUnmounted) return;
-      this.startAppQueue = this.startAppQueue.then(this.startApp);
-      if (this.name && window.__WUJIE_QUEUE) {
-        window.__WUJIE_QUEUE[this.name] = this.startAppQueue;
-      }
-    },
-    destroy() {
-      destroyApp(this.name);
-    },
-  },
-  beforeDestroy() {
-    this.isUnmounted = true;
-    bus.$offAll(this.handleEmit);
-    clearStartAppQueue(this.name, this.startAppQueue);
-  },
-  render() {
-    return h("div", {
-      style: {
-        width: this.width,
-        height: this.height,
-        ...this.style,
-      },
-      ref: "wujie",
-    });
-  },
-};
+    }
 
-const WujieVue = defineComponent(wujieVueOptions);
+    function execStartApp() {
+      // 组件已卸载，不再向队列添加新任务
+      if (isUnmounted) return;
+      startAppQueue.value = startAppQueue.value.then(startApp);
+      if (props.name && window.__WUJIE_QUEUE) {
+        window.__WUJIE_QUEUE[props.name] = startAppQueue.value;
+      }
+    }
+
+    // 初始化队列
+    if (props.name) {
+      if (window.__WUJIE_QUEUE) {
+        if (window.__WUJIE_QUEUE[props.name]) {
+          startAppQueue.value = window.__WUJIE_QUEUE[props.name];
+        } else {
+          window.__WUJIE_QUEUE[props.name] = startAppQueue.value;
+        }
+      } else {
+        window.__WUJIE_QUEUE = {
+          [props.name]: startAppQueue.value,
+        };
+      }
+    }
+
+    onMounted(() => {
+      bus.$onAll(handleEmit);
+      execStartApp();
+    });
+
+    onBeforeUnmount(() => {
+      isUnmounted = true;
+      bus.$offAll(handleEmit);
+      clearStartAppQueue(props.name, startAppQueue.value);
+    });
+
+    watch(
+      () => [props.name, props.url],
+      () => execStartApp()
+    );
+
+    return () =>
+      h("div", {
+        style: {
+          width: props.width,
+          height: props.height,
+          ...props.style,
+        },
+        ref: wujieRef,
+      });
+  },
+});
 
 WujieVue.setupApp = setupApp;
 WujieVue.preloadApp = preloadApp;
 WujieVue.bus = bus;
 WujieVue.destroyApp = destroyApp;
+// WujieVue.refreshApp = refreshApp;
 WujieVue.install = function (app) {
   app.component("WujieVue", WujieVue);
 };
