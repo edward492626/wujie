@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [2.0.2](https://github.com/Tencent/wujie/compare/v2.0.1...v2.0.2) (2026-06-04)
+
+### Bug Fixes
+
+* **adapter:** 清理 __WUJIE_QUEUE 防止组件销毁后内存泄漏 ([#1089](https://github.com/Tencent/wujie/issues/1089)) ([e368e99](https://github.com/Tencent/wujie/commit/e368e99cf54ae78881e5dec3f22ee235edfe4542))
+
 ## [2.0.1](https://github.com/Tencent/wujie/compare/v2.0.0...v2.0.1) (2026-06-03)
 
 **Note:** Version bump only for package wujie-vue3

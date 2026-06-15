@@ -32,7 +32,7 @@ import {
 import { EventBus, appEventObjMap, EventObj } from "./event";
 import { EventCleanupTracker } from "./tracker";
 import { isFunction, wujieSupport, appRouteParse, requestIdleCallback, getAbsolutePath, eventTrigger } from "./utils";
-import { WUJIE_DATA_ATTACH_CSS_FLAG } from "./constant";
+import { WUJIE_DATA_ATTACH_CSS_FLAG, WUJIE_APP_ID, WUJIE_FONT_STYLE_CONTAINER_ATTR } from "./constant";
 import { plugin, ScriptObjectLoader, loadErrorHandler } from "./index";
 
 export type lifecycle = (appWindow: Window) => any;
@@ -61,6 +61,12 @@ export default class Wujie {
   public proxyDocument: Object;
   /** location代理 */
   public proxyLocation: Object;
+  /**
+   * 释放 window / document / location 代理。
+   * 代理的 handler 闭包捕获了 iframe / urlElement 等 DOM 引用，destroy 时调用此函数
+   * 解除代理与 handler 的关联，斩断「主应用 → 代理闭包 → iframe」的引用链。
+   */
+  public proxyRevoke: () => void;
   /** 事件中心 */
   public bus: EventBus;
   /** 容器 */
@@ -107,6 +113,9 @@ export default class Wujie {
   public document: Document;
   /** 子应用styleSheet元素 */
   public styleSheetElements: Array<HTMLLinkElement | HTMLStyleElement>;
+
+  /** 子应用 font-face 样式元素，挂载在最外层 document.head */
+  public fontStyleSheetElements: Array<HTMLStyleElement> = [];
   /**
    * 子应用通过 document.head.appendChild(<script>) 触发的动态脚本节点。
    * 由 insertScriptToIframe 在收到 rawElement（即 effect.ts 转发的动态 script）
@@ -149,6 +158,7 @@ export default class Wujie {
     idToSandboxMap: Map<String, SandboxCache>;
     appEventObjMap: Map<String, EventObj>;
     mainHostPath: string;
+    fontStyleSheetContainer?: HTMLElement;
   };
 
   /** 激活子应用
@@ -426,6 +436,7 @@ export default class Wujie {
     // 释放动态样式 / 脚本节点（unmount 阶段保留以便 rebuildStyleSheets 复用，destroy 阶段才彻底清）
     this.clearStyleSheets();
     this.clearDynamicScripts();
+    this.clearFontStyleSheets();
     // 解绑等待 href 赋值的 MutationObserver，避免闭包钉住已销毁的 sandbox
     this.clearDeferredStyleObservers();
     // 先 $destroy 再置 null：清空事件并从全局 appEventObjMap 中移除当前 id 的 entry，
@@ -439,6 +450,7 @@ export default class Wujie {
     this.provide = null;
     this.degradeAttrs = null;
     this.styleSheetElements = null;
+    this.fontStyleSheetElements = null;
     this.dynamicScriptElements = null;
     this.deferredStyleObservers = null;
     this.bus = null;
@@ -475,9 +487,11 @@ export default class Wujie {
       // patchElementEffect 给散落到主应用 DOM 上的 element 留了 baseURI / ownerDocument
       // getter，它们通过 iframeWindow.__WUJIE 动态读取。这里主动断链让残留 getter 立即
       // 降级到主 document，避免 element 把 sandbox 钉在内存中。
+      // __WUJIE / $wujie 均挂在 iframeWindow 上，destroy 时须一并置 null。
       if (iframeWindow) {
         try {
           iframeWindow.__WUJIE = null;
+          iframeWindow.$wujie = null;
         } catch (_) {
           /* noop: iframe 已 detach 时赋值可能抛错 */
         }
@@ -485,6 +499,14 @@ export default class Wujie {
       this.iframe.parentNode?.removeChild(this.iframe);
       this.iframe = null;
     }
+    // 释放 window / document / location 代理：解除代理与 handler 的关联，使捕获了 iframe /
+    // urlElement 的 handler 闭包不可达，斩断「主应用 → 代理闭包 → iframe」的引用链。
+    try {
+      this.proxyRevoke?.();
+    } catch (_) {
+      /* noop: 代理已释放时重复调用可能抛错 */
+    }
+    this.proxyRevoke = null;
     // 反向解绑 patchDocumentEffect / patchWindowEffect 在主 window / document 上挂的副作用
     this.eventCleanupTracker.cleanupAll();
     deleteWujieById(this.id);
@@ -525,6 +547,22 @@ export default class Wujie {
   }
 
   /**
+   * destroy 阶段清空 fontStyleSheetElements，同时把节点从父节点 detach。
+   * 使用 WUJIE_APP_ID 标识属于当前子应用的 font 样式。
+   */
+  public clearFontStyleSheets(): void {
+    if (!Array.isArray(this.fontStyleSheetElements)) return;
+    this.fontStyleSheetElements.forEach((el) => {
+      try {
+        el.parentNode?.removeChild(el);
+      } catch (_) {
+        /* noop */
+      }
+    });
+    this.fontStyleSheetElements.length = 0;
+  }
+
+  /**
    * unmount / destroy 阶段统一 disconnect 等待 href 赋值的 MutationObserver。
    * observer 在 href 命中或超时兜底时会自行 disconnect 并出队；
    * 这里兜底处理「子应用先于 href 赋值被卸载/销毁」的场景。
@@ -539,6 +577,20 @@ export default class Wujie {
       }
     });
     this.deferredStyleObservers.length = 0;
+  }
+
+  /**
+   * 创建或获取 font 样式容器（挂载在最外层 document.head）
+   * 用于存放子应用的 @font-face 样式，确保嵌套子应用也能正确应用字体
+   */
+  private createFontStyleSheetContainer(): HTMLElement {
+    const container = rawDocumentQuerySelector.call(document, `[${WUJIE_FONT_STYLE_CONTAINER_ATTR}]`);
+    if (container) return container as HTMLElement;
+
+    const styleElement = document.createElement("style");
+    styleElement.setAttribute(WUJIE_FONT_STYLE_CONTAINER_ATTR, "");
+    document.head.appendChild(styleElement);
+    return styleElement;
   }
 
   /** 当子应用再次激活后，只运行mount函数，样式需要重新恢复 */
@@ -569,7 +621,9 @@ export default class Wujie {
       this.styleSheetElements.push(hostStyleSheetElement);
     }
     if (fontStyleSheetElement) {
-      this.shadowRoot.host.appendChild(fontStyleSheetElement);
+      this.inject.fontStyleSheetContainer?.appendChild(fontStyleSheetElement);
+      fontStyleSheetElement.setAttribute(WUJIE_APP_ID, this.id);
+      this.fontStyleSheetElements.push(fontStyleSheetElement);
     }
     (hostStyleSheetElement || fontStyleSheetElement) &&
       this.shadowRoot.host.setAttribute(WUJIE_DATA_ATTACH_CSS_FLAG, "");
@@ -598,6 +652,7 @@ export default class Wujie {
         idToSandboxMap: idToSandboxCacheMap,
         appEventObjMap,
         mainHostPath: window.location.protocol + "//" + window.location.host,
+        fontStyleSheetContainer: this.createFontStyleSheetContainer(),
       };
     }
     const { name, url, attrs, fiber, degradeAttrs, degrade, lifecycles, plugins } = options;
@@ -622,11 +677,17 @@ export default class Wujie {
     this.iframe = iframeGenerator(this, attrs, mainHostPath, appHostPath, appRoutePath);
 
     if (this.degrade) {
-      const { proxyDocument, proxyLocation } = localGenerator(this.iframe, urlElement, mainHostPath, appHostPath);
+      const { proxyDocument, proxyLocation, proxyRevoke } = localGenerator(
+        this.iframe,
+        urlElement,
+        mainHostPath,
+        appHostPath
+      );
       this.proxyDocument = proxyDocument;
       this.proxyLocation = proxyLocation;
+      this.proxyRevoke = proxyRevoke;
     } else {
-      const { proxyWindow, proxyDocument, proxyLocation } = proxyGenerator(
+      const { proxyWindow, proxyDocument, proxyLocation, proxyRevoke } = proxyGenerator(
         this.iframe,
         urlElement,
         mainHostPath,
@@ -635,6 +696,7 @@ export default class Wujie {
       this.proxy = proxyWindow;
       this.proxyDocument = proxyDocument;
       this.proxyLocation = proxyLocation;
+      this.proxyRevoke = proxyRevoke;
     }
     this.provide.location = this.proxyLocation;
 
