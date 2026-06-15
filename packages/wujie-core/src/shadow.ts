@@ -20,7 +20,7 @@ import Wujie from "./sandbox";
 import { initBase, patchElementEffect } from "./iframe";
 import { patchRenderEffect } from "./effect";
 import { getCssLoader, getPresetLoaders } from "./plugin";
-import { getAbsolutePath, getContainer, getCurUrl, isFunction, setAttrsToElement, warn } from "./utils";
+import { getAbsolutePath, getContainer, getCurUrl, isFunction, setAttrsToElement } from "./utils";
 
 const cssSelectorMap = {
   ":root": ":host",
@@ -48,9 +48,10 @@ export function handleWujieAppDisconnect(sandbox: Wujie | null | undefined): voi
   const iframeWindow = sandbox.iframe?.contentWindow;
   const isRebuildMode = !sandbox.alive && !isFunction(iframeWindow?.__WUJIE_MOUNT);
   if (isRebuildMode) {
-    sandbox.destroy().catch((e) => warn(`destroy error: ${e}`));
+    sandbox.destroy();
   } else {
-    sandbox.unmount().catch((e) => warn(`unmount error: ${e}`));
+    // sandbox.unmount().catch((e) => warn(`unmount error: ${e}`));
+    sandbox.unmount();
   }
 }
 

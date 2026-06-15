@@ -401,7 +401,7 @@ export default class Wujie {
   }
 
   /** 保活模式和使用proxyLocation.href跳转链接都不应该销毁shadow */
-  public async unmount(): Promise<void> {
+  public unmount(): void {
     // 子应用卸载时 disconnect 等待 href 的 MutationObserver，避免闭包在 remount 前仍持有上下文
     this.clearDeferredStyleObservers();
     this.activeFlag = false;
@@ -413,7 +413,7 @@ export default class Wujie {
     if (!this.mountFlag) return;
     if (isFunction(this.iframe.contentWindow.__WUJIE_UNMOUNT) && !this.alive && !this.hrefFlag) {
       this.lifecycles?.beforeUnmount?.(this.iframe.contentWindow);
-      await this.iframe.contentWindow.__WUJIE_UNMOUNT();
+      this.iframe.contentWindow.__WUJIE_UNMOUNT();
       this.lifecycles?.afterUnmount?.(this.iframe.contentWindow);
       this.mountFlag = false;
       this.bus?.$clear();
@@ -433,7 +433,7 @@ export default class Wujie {
   }
 
   /** 销毁子应用 */
-  public async destroy() {
+  public destroy(): void {
     // 防重入：极端时序下 destroyApp / disconnectedCallback / startApp 可能并发触发，
     // 标志位确保同一实例只执行一次完整销毁。
     if (this.destroyed) return;
@@ -441,7 +441,7 @@ export default class Wujie {
     // 同步从全局 map 移除自身：确保 await 挂起期间并发的 disconnectedCallback /
     // startApp 通过 getWujieById 拿到 null，避免对同一实例重复 destroy（竞态根因）。
     deleteWujieById(this.id);
-    await this.unmount();
+    this.unmount();
     // 释放动态样式 / 脚本节点（unmount 阶段保留以便 rebuildStyleSheets 复用，destroy 阶段才彻底清）
     this.clearStyleSheets();
     this.clearDynamicScripts();

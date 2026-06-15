@@ -98,7 +98,7 @@ declare global {
     // 子应用mount函数
     __WUJIE_MOUNT: () => void;
     // 子应用unmount函数
-    __WUJIE_UNMOUNT: () => void | Promise<void>;
+    __WUJIE_UNMOUNT: () => void;
     // 获取子应用 window 的辅助函数（用于内联事件处理器），入参为子应用 appId
     __getWujieWindow__: (appId: string) => WindowProxy;
     // document type
