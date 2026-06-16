@@ -1,4 +1,4 @@
-import { bus, preloadApp, startApp as rawStartApp, destroyApp, setupApp } from "wujie";
+import { bus, preloadApp, startApp as rawStartApp, destroyApp, setupApp, refreshApp } from "wujie";
 import { h, defineComponent, ref, onMounted, onBeforeUnmount, watch } from "vue";
 
 /**
@@ -94,7 +94,7 @@ const WujieVue = defineComponent({
     }
 
     function execStartApp() {
-      // 组件已卸载，不再向队列添加新任务
+       // 卸载后 watch 残留触发不应再入队
       if (isUnmounted) return;
       startAppQueue.value = startAppQueue.value.then(startApp);
       if (props.name && window.__WUJIE_QUEUE) {
@@ -149,7 +149,7 @@ WujieVue.setupApp = setupApp;
 WujieVue.preloadApp = preloadApp;
 WujieVue.bus = bus;
 WujieVue.destroyApp = destroyApp;
-// WujieVue.refreshApp = refreshApp;
+WujieVue.refreshApp = refreshApp;
 WujieVue.install = function (app) {
   app.component("WujieVue", WujieVue);
 };

@@ -24,6 +24,9 @@
   },
   "author": "yiludege",
   "license": "MIT",
+  "lint-staged": {
+    "packages/wujie-core/src/**/*.ts": "./packages/wujie-core/node_modules/.bin/eslint --fix --ext .ts --config packages/wujie-core/.eslintrc.js"
+  },
   "devDependencies": {
     "@commitlint/cli": "^16.2.3",
     "@commitlint/config-conventional": "^16.2.1",

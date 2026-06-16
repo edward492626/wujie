@@ -3,6 +3,20 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [2.1.0](https://github.com/Tencent/wujie/compare/v2.0.2...v2.1.0) (2026-06-15)
+
+### Bug Fixes
+
+* 修复子应用刷新场景 destroy 竞态导致的内存泄漏 ([#1098](https://github.com/Tencent/wujie/issues/1098)) ([665e1d2](https://github.com/Tencent/wujie/commit/665e1d2a7a33b030a0d4955a7c3829d8c1c93359))
+* 修复异步加载 CSS 时重复插入的问题 ([#1093](https://github.com/Tencent/wujie/issues/1093)) ([e132206](https://github.com/Tencent/wujie/commit/e132206f900dd870aa3cd9ff836a3896c536e367))
+* 将 font 样式挂载到最外层 document.head 以支持嵌套子应用 ([90f4a54](https://github.com/Tencent/wujie/commit/90f4a549981246bb7cf54414cae7b4b94104004c)), closes [#1092](https://github.com/Tencent/wujie/issues/1092) [#1093](https://github.com/Tencent/wujie/issues/1093) [#845](https://github.com/Tencent/wujie/issues/845) [#620](https://github.com/Tencent/wujie/issues/620)
+* 用 lint-staged 替代 lint 脚本中的 git add ([01dc243](https://github.com/Tencent/wujie/commit/01dc243f1d5a06dcfec722b3ebe4ecc35426bd51))
+
+### Features
+
+* 支持内联事件处理器在子应用作用域中执行 ([#1091](https://github.com/Tencent/wujie/issues/1091)) ([b178735](https://github.com/Tencent/wujie/commit/b178735b7cdaec36c6013a05aad13135578b3c81))
+* 新增 refreshApp API 支持子应用全量重建刷新 ([#1099](https://github.com/Tencent/wujie/issues/1099)) ([a086e52](https://github.com/Tencent/wujie/commit/a086e52134c943f593cfe029f41769efad52f6eb)), closes [#740](https://github.com/Tencent/wujie/issues/740)
+
 ## [2.0.2](https://github.com/Tencent/wujie/compare/v2.0.1...v2.0.2) (2026-06-04)
 
 ### Bug Fixes
