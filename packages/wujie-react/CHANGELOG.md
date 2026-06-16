@@ -3,6 +3,16 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [2.1.0](https://github.com/Tencent/wujie/compare/v2.0.2...v2.1.0) (2026-06-15)
+
+### Bug Fixes
+
+* 修复子应用刷新场景 destroy 竞态导致的内存泄漏 ([#1098](https://github.com/Tencent/wujie/issues/1098)) ([665e1d2](https://github.com/Tencent/wujie/commit/665e1d2a7a33b030a0d4955a7c3829d8c1c93359))
+
+### Features
+
+* 新增 refreshApp API 支持子应用全量重建刷新 ([#1099](https://github.com/Tencent/wujie/issues/1099)) ([a086e52](https://github.com/Tencent/wujie/commit/a086e52134c943f593cfe029f41769efad52f6eb)), closes [#740](https://github.com/Tencent/wujie/issues/740)
+
 ## [2.0.2](https://github.com/Tencent/wujie/compare/v2.0.1...v2.0.2) (2026-06-04)
 
 ### Bug Fixes
