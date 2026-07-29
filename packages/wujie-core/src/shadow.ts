@@ -269,8 +269,7 @@ export async function renderTemplateToShadowRoot(
     getBoundingClientRect: {
       enumerable: true,
       configurable: true,
-      value: () =>
-        iframeWindow.__WUJIE_RAW_DOCUMENT_QUERY_SELECTOR__.call(iframeWindow.document, "html")!.getBoundingClientRect(),
+      value: () => shade.getBoundingClientRect(),
     },
   });
 
