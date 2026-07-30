@@ -257,7 +257,42 @@ export async function renderTemplateToShadowRoot(
   shadowRoot.body = shadowRoot.querySelector("body");
 
   const shadowHtml = shadowRoot.firstElementChild as HTMLElement;
-  Object.defineProperties(shadowHtml, {
+  const hostDocumentElement = window.document.documentElement as HTMLElement;
+  const shadowBody = shadowRoot.body as HTMLBodyElement | null;
+
+  const AG_GRID_POPUP_SELECTOR = ".ag-popup";
+  const AG_GRID_OFFSET_PROPERTY_SET = new Set(["offsetHeight", "offsetWidth"]);
+  const DOCUMENT_GEOMETRY_PROPERTY_LIST: Array<
+    | "clientHeight"
+    | "clientWidth"
+    | "clientTop"
+    | "clientLeft"
+    | "scrollHeight"
+    | "scrollWidth"
+    | "scrollTop"
+    | "scrollLeft"
+    | "offsetHeight"
+    | "offsetWidth"
+    | "offsetTop"
+    | "offsetLeft"
+  > = [
+    "clientHeight",
+    "clientWidth",
+    "clientTop",
+    "clientLeft",
+    "scrollHeight",
+    "scrollWidth",
+    "scrollTop",
+    "scrollLeft",
+    "offsetTop",
+    "offsetLeft",
+    "offsetHeight",
+    "offsetWidth",
+  ];
+
+  const hasAgGridPopup = (): boolean => !!shadowBody?.querySelector(AG_GRID_POPUP_SELECTOR);
+
+  const propertyDescriptors: PropertyDescriptorMap = {
     // 修复 html parentNode
     parentNode: {
       enumerable: true,
@@ -269,9 +304,38 @@ export async function renderTemplateToShadowRoot(
     getBoundingClientRect: {
       enumerable: true,
       configurable: true,
-      value: () => shade.getBoundingClientRect(),
+      value: () => {
+        if (shadowBody && hasAgGridPopup()) return shadowBody.getBoundingClientRect();
+        return shade.getBoundingClientRect();
+      },
     },
+  };
+
+  DOCUMENT_GEOMETRY_PROPERTY_LIST.forEach((property) => {
+    propertyDescriptors[property] = {
+      enumerable: true,
+      configurable: true,
+      get(this: HTMLElement) {
+        if (shadowBody && AG_GRID_OFFSET_PROPERTY_SET.has(property) && hasAgGridPopup()) {
+          return (shadowBody as unknown as Record<string, unknown>)[property];
+        }
+        return (hostDocumentElement as unknown as Record<string, unknown>)[property];
+      },
+      set(this: HTMLElement, value: unknown) {
+        if (AG_GRID_OFFSET_PROPERTY_SET.has(property) && shadowBody && hasAgGridPopup()) {
+          (shadowBody as unknown as Record<string, unknown>)[property] = value;
+          return true;
+        }
+        if (property === "scrollTop" || property === "scrollLeft") {
+          (hostDocumentElement as unknown as Record<string, unknown>)[property] = value;
+          return true;
+        }
+        return true;
+      },
+    };
   });
+
+  Object.defineProperties(shadowHtml, propertyDescriptors);
 
   patchRenderEffect(shadowRoot, iframeWindow.__WUJIE.id, false);
 }
