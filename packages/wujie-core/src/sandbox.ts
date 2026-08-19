@@ -180,6 +180,10 @@ export default class Wujie {
     fetch?: (input: RequestInfo, init?: RequestInit) => Promise<Response>;
     replace?: (code: string) => string;
   }): Promise<void> {
+    // 竞态防护（双保险，与 startApp 复用分支的 destroyed 校验配合）：
+    // active 内部 await this.iframeReady 会再次让出，恢复时 sandbox 可能已被销毁。
+    // 已销毁沙箱禁止激活，防止 iframe/shadowRoot 被重新 append 回容器形成僵尸 DOM。
+    if (this.destroyed) return;
     const { sync, url, el, template, props, alive, prefix, fetch, replace } = options;
     this.url = url;
     this.sync = sync;
@@ -191,6 +195,8 @@ export default class Wujie {
     this.activeFlag = true;
     // wait iframe init
     await this.iframeReady;
+    // await 恢复后 sandbox 可能已被并发 destroy，二次校验
+    if (this.destroyed) return;
 
     // 处理子应用自定义fetch
     // TODO fetch检验合法性
@@ -386,7 +392,11 @@ export default class Wujie {
    * 实例时，子应用异步函数里面最后加上window.__WUJIE.mount()来主动调用
    */
   public mount(): void {
-    if (this.mountFlag) return;
+    // destroy 后 execQueue 已置 null，排队的幽灵 mount 任务（如子应用在
+    // __WUJIE_UNMOUNT 过程中主动调用 window.__WUJIE.mount()、或串行队列中
+    // 残留的 startApp then 链）必须丢弃，防止已销毁沙箱被重新挂载成僵尸，
+    // 导致 iframe 与整个子应用 realm 被 ScriptStateImpl 长期保活。
+    if (this.mountFlag || this.destroyed) return;
     if (isFunction(this.iframe.contentWindow.__WUJIE_MOUNT)) {
       removeLoading(this.el);
       this.lifecycles?.beforeMount?.(this.iframe.contentWindow);
@@ -451,6 +461,22 @@ export default class Wujie {
     // 先 $destroy 再置 null：清空事件并从全局 appEventObjMap 中移除当前 id 的 entry，
     // 避免 setupApp → destroyApp 反复后 map 条目持续累积。
     this.bus.$destroy();
+    // 跨 realm 泄漏清理：子应用内二次加载的 wujie 副本（如 EFX 等组件库打包的 wujie）
+    // 会复用挂在本 iframe window.__WUJIE_INJECT 上的共享 appEventObjMap，其模块级
+    // bus = new EventBus(Date.now()) 构造时会向该 Map set 一个创建于 iframe realm 的
+    // 空 eventObj。子应用销毁后该副本模块已不可达、无人调用其 $destroy，空 entry
+    // 残留在主 realm 的 Map 中 —— V8 hidden class 对创建时 NativeContext 的固有
+    // 引用会把整个子应用 realm（iframe、DOM、JS 对象）永久钉死。
+    // 空 entry 不含任何回调、对事件总线无语义，销毁沙箱时统一移除。
+    try {
+      appEventObjMap.forEach((eventObj, key) => {
+        if (!eventObj || Object.keys(eventObj).length === 0) {
+          appEventObjMap.delete(key);
+        }
+      });
+    } catch (_) {
+      /* noop: 清理失败不应阻断 destroy 主流程 */
+    }
     this.shadowRoot = null;
     this.proxy = null;
     this.proxyDocument = null;
@@ -481,17 +507,30 @@ export default class Wujie {
     this.iframeAddEventListeners = null;
     this.iframeOnEvents = null;
     // 清除 dom
+    // 注意：destroyApp 是 async（await sandbox.destroy() 产生微任务让出），destroy()
+    // 实际执行时 Vue 可能正在同步卸载同一棵 DOM。clearChild 内的 removeChild 与
+    // Vue 的卸载并发操作同一批子节点会抛 NotFoundError，若不隔离会中断 destroy，
+    // 导致下方 iframe 摘除被跳过（iframe 保持 attached，Blink ScriptState 将整个
+    // 子应用 realm 钉死在内存中）。因此 el 清理必须与 iframe 摘除互相异常隔离。
     if (this.el) {
-      clearChild(this.el);
+      try {
+        clearChild(this.el);
+      } catch (_) {
+        /* noop: 与 Vue 并发卸载同一子树时可能抛 NotFoundError */
+      }
       this.el = null;
     }
     // 清除 iframe 沙箱
     if (this.iframe) {
       const iframeWindow = this.iframe.contentWindow;
       if (iframeWindow?.__WUJIE_EVENTLISTENER__) {
-        iframeWindow.__WUJIE_EVENTLISTENER__.forEach((o) => {
-          iframeWindow.removeEventListener(o.type, o.listener, o.options);
-        });
+        try {
+          iframeWindow.__WUJIE_EVENTLISTENER__.forEach((o) => {
+            iframeWindow.removeEventListener(o.type, o.listener, o.options);
+          });
+        } catch (_) {
+          /* noop: 跨 realm 解绑失败不应阻断 iframe 摘除 */
+        }
       }
       // patchElementEffect 给散落到主应用 DOM 上的 element 留了 baseURI / ownerDocument
       // getter，它们通过 iframeWindow.__WUJIE 动态读取。这里主动断链让残留 getter 立即
@@ -505,7 +544,11 @@ export default class Wujie {
           /* noop: iframe 已 detach 时赋值可能抛错 */
         }
       }
-      this.iframe.parentNode?.removeChild(this.iframe);
+      try {
+        this.iframe.parentNode?.removeChild(this.iframe);
+      } catch (_) {
+        /* noop: 并发卸载时父节点可能已变更 */
+      }
       this.iframe = null;
     }
     // 释放 window / document / location 代理：解除代理与 handler 的关联，使捕获了 iframe /

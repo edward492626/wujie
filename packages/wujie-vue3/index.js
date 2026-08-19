@@ -75,7 +75,11 @@ const WujieVue = defineComponent({
       () => this.execStartApp()
     );
   },
-  beforeDestroy() {
+  // Vue3 钩子名为 unmounted（Vue2 的 beforeDestroy 在 Vue3 中不会触发）。
+  // 若沿用 beforeDestroy，bus.$offAll(this.handleEmit) 永远不执行，
+  // 每次组件销毁都会向全局 bus 泄漏一个 handleEmit 闭包，
+  // 该闭包经组件实例代理钉住整个 sandbox（含 iframe 与子应用 DOM 树）。
+  unmounted() {
     this.isUnmounted = true;
     bus.$offAll(this.handleEmit);
     clearStartAppQueue(this.name, this.startAppQueue);

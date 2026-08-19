@@ -226,9 +226,19 @@ export async function startApp(startOptions: startOptions): Promise<Function | v
     if (sandbox.preload) {
       await sandbox.preload;
     }
+    // 竞态防护：await 让出期间 sandbox 可能已被 destroyApp/组件卸载销毁（destroyed=true、
+    // iframe 已摘除）。此时必须中止复用，否则下方 active() 会把已销毁的 iframe/shadowRoot
+    // 重新 append 回容器、__WUJIE_MOUNT() 会把子应用 Vue 僵尸复活 —— iframe 保持 attached，
+    // Blink ScriptState 将整个子应用 realm 钉死在内存中（快照表现为 detach=0 的泄漏 iframe）。
+    if (sandbox.destroyed) {
+      return () => sandbox.destroy();
+    }
     if (alive) {
       // 保活
       await sandbox.active({ url, sync, prefix, el, props, alive, fetch, replace });
+      if (sandbox.destroyed) {
+        return () => sandbox.destroy();
+      }
       // 预加载但是没有执行的情况
       if (!sandbox.execFlag) {
         sandbox.lifecycles?.beforeLoad?.(sandbox.iframe.contentWindow);
@@ -252,7 +262,13 @@ export async function startApp(startOptions: startOptions): Promise<Function | v
        * 此处是防止没有销毁webcomponent时调用startApp的情况，需要手动调用unmount
        */
       await sandbox.unmount();
+      if (sandbox.destroyed) {
+        return () => sandbox.destroy();
+      }
       await sandbox.active({ url, sync, prefix, el, props, alive, fetch, replace });
+      if (sandbox.destroyed) {
+        return () => sandbox.destroy();
+      }
       // 正常加载的情况，先注入css，最后才mount。重新激活也保持同样的时序
       sandbox.rebuildStyleSheets();
       // 有渲染函数
@@ -292,9 +308,19 @@ export async function startApp(startOptions: startOptions): Promise<Function | v
       fiber,
     },
   });
-
+  // 竞态防护：构造器已将 newSandbox 注册进全局 map，await importHTML 让出期间
+  // 并发的 destroyApp 可触达并销毁它（execQueue/execQueue 相关字段已置 null）。
+  // 此后禁止继续 processCssLoader / active / start，否则在已销毁实例上操作
+  // 会抛 TypeError，甚至把子应用脚本注入已摘除的 iframe。
+  if (newSandbox.destroyed) {
+    return () => newSandbox.destroy();
+  }
   const processedHtml = await processCssLoader(newSandbox, template, getExternalStyleSheets);
   await newSandbox.active({ url, sync, prefix, template: processedHtml, el, props, alive, fetch, replace });
+  // active 内部 await iframeReady 同样可能跨越销毁点，start 前必须二次校验
+  if (newSandbox.destroyed) {
+    return () => newSandbox.destroy();
+  }
   await newSandbox.start(getExternalScripts);
   return () => newSandbox.destroy();
 }
@@ -357,8 +383,12 @@ export function preloadApp(preOptions: preOptions): void {
           fiber,
         },
       });
+      // 竞态防护：预加载期间被 destroyApp 销毁（如用户快速开关页面）时中止，
+      // 避免在已销毁实例上继续 active / start（runPreload 无外层 catch，异常会成为 unhandledrejection）
+      if (sandbox.destroyed) return;
       const processedHtml = await processCssLoader(sandbox, template, getExternalStyleSheets);
       await sandbox.active({ url, props, prefix, alive, template: processedHtml, fetch, replace });
+      if (sandbox.destroyed) return;
       if (exec) {
         await sandbox.start(getExternalScripts);
       } else {
