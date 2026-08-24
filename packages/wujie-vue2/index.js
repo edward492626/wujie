@@ -1,5 +1,5 @@
 import Vue from "vue";
-import { bus, preloadApp, startApp as rawStartApp, destroyApp, setupApp, refreshApp } from "wujie";
+import { bus, preloadApp, startApp as rawStartApp, destroyApp as wujieDestroyApp, setupApp, refreshApp as wujieRefreshApp } from "wujie";
 
 /**
  * 清理全局 startApp 串行队列，防止组件销毁后 window.__WUJIE_QUEUE 长期持有
@@ -121,13 +121,14 @@ const wujieVueOptions = {
         window.__WUJIE_QUEUE[this.name] = this.startAppQueue;
       }
     },
+    /** 销毁当前子应用沙箱（不销毁组件自身） */
     destroy() {
-      destroyApp(this.name);
+      wujieDestroyApp(this.name);
     },
-    // 销毁当前子应用实例并复用组件 props 全量重建
+    /** 销毁当前子应用实例并复用组件容器全量重建（关闭重开语义） */
     async refresh() {
       if (this.isUnmounted) return;
-      await destroyApp(this.name);
+      await wujieDestroyApp(this.name);
       this.execStartApp();
       return this.startAppQueue;
     },
@@ -154,8 +155,8 @@ const WujieVue = Vue.extend(wujieVueOptions);
 WujieVue.setupApp = setupApp;
 WujieVue.preloadApp = preloadApp;
 WujieVue.bus = bus;
-WujieVue.destroyApp = destroyApp;
-WujieVue.refreshApp = refreshApp;
+WujieVue.destroyApp = wujieDestroyApp;
+WujieVue.refreshApp = wujieRefreshApp;
 WujieVue.install = function (Vue) {
   Vue.component("WujieVue", WujieVue);
 };
